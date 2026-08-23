@@ -2,9 +2,7 @@ import streamlit as st
 import pickle
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-from matplotlib.patches import Arc, FancyArrowPatch
+import plotly.graph_objects as go
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -13,25 +11,23 @@ st.set_page_config(page_title="CHD Risk Calculator", page_icon="🫀", layout="c
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap');
-html, body, [class*="css"] { font-family: 'Inter', sans-serif; background-color: #0f1117; color: #e8e8e8; }
-.main { background-color: #0f1117; }
-#MainMenu, footer { visibility: hidden; }
-.block-container { padding: 2rem 2rem 4rem 2rem; max-width: 820px; }
-.hero { border-left: 3px solid #e05c5c; padding: 1.2rem 1.5rem; margin-bottom: 2rem;
-        background: linear-gradient(135deg,#1a1d27,#161822); border-radius: 0 12px 12px 0; }
-.hero h1 { font-family: 'DM Serif Display',serif; font-size:1.9rem; font-weight:400;
-           color:#fff; margin:0 0 0.3rem 0; }
+html, body, [class*="css"] { font-family:'Inter',sans-serif; background-color:#0f1117; color:#e8e8e8; }
+.main { background-color:#0f1117; }
+#MainMenu, footer { visibility:hidden; }
+.block-container { padding:2rem 2rem 4rem 2rem; max-width:820px; }
+.hero { border-left:3px solid #e05c5c; padding:1.2rem 1.5rem; margin-bottom:2rem;
+        background:linear-gradient(135deg,#1a1d27,#161822); border-radius:0 12px 12px 0; }
+.hero h1 { font-family:'DM Serif Display',serif; font-size:1.9rem; font-weight:400; color:#fff; margin:0 0 0.3rem 0; }
 .hero p  { color:#8b8fa8; font-size:0.8rem; margin:0; letter-spacing:.03em; }
 .section-label { font-size:0.7rem; font-weight:600; letter-spacing:.12em;
                  text-transform:uppercase; color:#e05c5c; margin:1.8rem 0 0.6rem 0; }
 div[data-testid="stButton"] > button {
-    background:#e05c5c; color:white; border:none; border-radius:8px;
-    padding:0.65rem 2rem; font-size:0.9rem; font-weight:600; width:100%; margin-top:1rem; }
-div[data-testid="stButton"] > button:hover { background:#c94c4c; }
+    background:#e05c5c !important; color:white !important; border:none !important;
+    border-radius:8px !important; padding:0.65rem 2rem !important;
+    font-size:0.9rem !important; font-weight:600 !important; width:100% !important; margin-top:1rem !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Load model ────────────────────────────────────────────────────────────────
 @st.cache_resource
 def load_artifacts():
     with open("model_artifacts.pkl", "rb") as f:
@@ -43,14 +39,12 @@ except Exception as e:
     st.error(f"Model load failed: {e}")
     st.stop()
 
-# ── Hero ──────────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="hero">
   <h1>🫀 10-Year CHD Risk Calculator</h1>
   <p>FRAMINGHAM HEART STUDY · LOGISTIC REGRESSION + CONFORMAL PREDICTION · AUC 0.748</p>
 </div>""", unsafe_allow_html=True)
 
-# ── Inputs ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="section-label">Patient Profile</div>', unsafe_allow_html=True)
 
 col1, col2 = st.columns(2)
@@ -74,86 +68,80 @@ with col2:
     hr       = st.number_input("Heart Rate (bpm)", 44, 143, 75)
     glucose  = st.number_input("Glucose (mg/dL)", 40, 400, 80)
 
-# ── Gauge function ────────────────────────────────────────────────────────────
 def draw_gauge(prob):
-    fig, ax = plt.subplots(figsize=(6, 3.5), facecolor="#0f1117")
-    ax.set_facecolor("#0f1117")
-    ax.set_xlim(-1.3, 1.3)
-    ax.set_ylim(-0.2, 1.3)
-    ax.set_aspect("equal")
-    ax.axis("off")
+    if prob < 0.15:
+        bar_color = "#2d6a4f"
+    elif prob < 0.30:
+        bar_color = "#b5770d"
+    else:
+        bar_color = "#c0392b"
 
-    # Draw bands as thick line plots — solid_capstyle works here
-    bands = [(0, 0.15, "#2d6a4f"), (0.15, 0.30, "#b5770d"), (0.30, 1.0, "#7a1e1e")]
-    for lo, hi, color in bands:
-        theta = np.linspace(np.pi * (1 - hi), np.pi * (1 - lo), 200)
-        ax.plot(np.cos(theta), np.sin(theta),
-                color=color, lw=22, solid_capstyle="butt")
-
-    # Needle
-    angle_rad = np.pi * (1 - prob)
-    nx = 0.75 * np.cos(angle_rad)
-    ny = 0.75 * np.sin(angle_rad)
-    ax.annotate("", xy=(nx, ny), xytext=(0, 0),
-                arrowprops=dict(arrowstyle="-|>", color="white",
-                                lw=2.5, mutation_scale=15))
-    ax.plot(0, 0, "o", color="white", markersize=8, zorder=5)
-
-    # Population average marker
-    avg_angle = np.pi * (1 - 0.152)
-    ax.plot(np.cos(avg_angle), np.sin(avg_angle), "|",
-            color="#aaaaaa", markersize=14, markeredgewidth=2)
-    ax.text(1.05 * np.cos(avg_angle), 1.05 * np.sin(avg_angle) + 0.05,
-            "avg", ha="center", va="bottom", color="#aaaaaa", fontsize=7)
-
-    # Percentage label
-    ax.text(0, -0.12, f"{prob*100:.1f}%",
-            ha="center", va="center", fontsize=28,
-            fontweight="bold", color="white")
-    ax.text(0, -0.28, "10-year CHD probability",
-            ha="center", va="center", fontsize=8, color="#8b8fa8")
-
-    # Scale labels
-    for pct, label in [(0, "0%"), (0.15, "15%"), (0.30, "30%"), (1.0, "100%")]:
-        a = np.pi * (1 - pct)
-        ax.text(1.15 * np.cos(a), 1.15 * np.sin(a), label,
-                ha="center", va="center", color="#8b8fa8", fontsize=7)
-
-    plt.tight_layout(pad=0)
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=round(prob * 100, 1),
+        number={"suffix": "%", "font": {"size": 42, "color": "white"}},
+        gauge={
+            "axis": {"range": [0, 100], "tickcolor": "#8b8fa8",
+                     "tickfont": {"color": "#8b8fa8", "size": 11}},
+            "bar": {"color": bar_color, "thickness": 0.25},
+            "bgcolor": "#1a1d27",
+            "borderwidth": 0,
+            "steps": [
+                {"range": [0,  15],  "color": "#1a3d2b"},
+                {"range": [15, 30],  "color": "#3d2e09"},
+                {"range": [30, 100], "color": "#3d0f0f"},
+            ],
+            "threshold": {
+                "line": {"color": "#aaaaaa", "width": 3},
+                "thickness": 0.8,
+                "value": 15.2
+            }
+        },
+        title={"text": "10-year CHD probability<br><span style='font-size:11px;color:#8b8fa8'>▲ grey marker = population average (15.2%)</span>",
+               "font": {"color": "#e8e8e8", "size": 14}}
+    ))
+    fig.update_layout(
+        paper_bgcolor="#0f1117",
+        font={"color": "white"},
+        height=300,
+        margin=dict(t=60, b=10, l=30, r=30)
+    )
     return fig
 
-# ── Coverage bar chart ────────────────────────────────────────────────────────
 def draw_coverage():
-    fig, ax = plt.subplots(figsize=(6, 2.2), facecolor="#1a1d27")
-    ax.set_facecolor("#1a1d27")
-
     targets   = [80, 85, 90, 95]
     empirical = [81.4, 85.9, 92.1, 96.5]
-    x = np.arange(len(targets))
 
-    bars = ax.bar(x, empirical, color="#e05c5c", alpha=0.85, width=0.5, zorder=2)
-    for i, (t, e) in enumerate(zip(targets, empirical)):
-        ax.axhline(t, xmin=(i)/len(targets)+0.05,
-                   xmax=(i+1)/len(targets)-0.05,
-                   color="white", lw=1.5, linestyle="--", zorder=3)
-        ax.text(i, e + 0.4, f"{e}%", ha="center", va="bottom",
-                color="white", fontsize=8, fontweight="600")
-
-    ax.set_xticks(x)
-    ax.set_xticklabels([f"{t}% target" for t in targets], color="#8b8fa8", fontsize=8)
-    ax.set_ylim(75, 100)
-    ax.set_ylabel("Empirical coverage", color="#8b8fa8", fontsize=8)
-    ax.tick_params(colors="#8b8fa8")
-    for spine in ax.spines.values():
-        spine.set_edgecolor("#2a2d3e")
-    ax.set_title("Conformal Coverage — Target vs Actual", color="#e8e8e8",
-                 fontsize=9, fontweight="500", pad=8)
-    ax.yaxis.set_tick_params(labelcolor="#8b8fa8")
-    ax.grid(axis="y", color="#2a2d3e", zorder=1)
-    plt.tight_layout()
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=[f"{t}% target" for t in targets],
+        y=empirical,
+        marker_color="#e05c5c",
+        text=[f"{e}%" for e in empirical],
+        textposition="outside",
+        textfont={"color": "white", "size": 11}
+    ))
+    for t, label in zip(targets, [f"{t}% target" for t in targets]):
+        fig.add_hline(y=t, line_dash="dash", line_color="#aaaaaa",
+                      line_width=1.5,
+                      annotation_text=f"target {t}%",
+                      annotation_font_color="#aaaaaa",
+                      annotation_font_size=9)
+    fig.update_layout(
+        title={"text": "Conformal Coverage — Target vs Actual",
+               "font": {"color": "#e8e8e8", "size": 13}},
+        paper_bgcolor="#0f1117",
+        plot_bgcolor="#1a1d27",
+        font={"color": "#8b8fa8"},
+        yaxis={"range": [75, 100], "gridcolor": "#2a2d3e",
+               "title": "Empirical coverage (%)"},
+        xaxis={"gridcolor": "#2a2d3e"},
+        height=280,
+        margin=dict(t=50, b=20, l=50, r=20),
+        showlegend=False
+    )
     return fig
 
-# ── Predict ───────────────────────────────────────────────────────────────────
 if st.button("Calculate Risk"):
     try:
         input_dict = {
@@ -179,14 +167,9 @@ if st.button("Calculate Risk"):
         scores   = 1 - proba
         pred_set = [c for c in [0, 1] if scores[c] <= artifacts["q_hat"]]
 
-        st.markdown('<div class="section-label">Result</div>',
-                    unsafe_allow_html=True)
+        st.markdown('<div class="section-label">Result</div>', unsafe_allow_html=True)
+        st.plotly_chart(draw_gauge(prob_chd), use_container_width=True)
 
-        # Gauge
-        st.pyplot(draw_gauge(prob_chd))
-        plt.close("all")
-
-        # Prediction set verdict
         if pred_set == [0]:
             st.success("**Prediction set {0}** — Model is confident: LOW risk")
         elif pred_set == [1]:
@@ -194,18 +177,12 @@ if st.button("Calculate Risk"):
         else:
             st.warning("**Prediction set {0, 1}** — Model is uncertain — risk could go either way")
 
-        # Coverage chart
-        st.markdown('<div class="section-label">Model Confidence</div>',
-                    unsafe_allow_html=True)
-        st.pyplot(draw_coverage())
-        plt.close("all")
-
+        st.markdown('<div class="section-label">Model Confidence</div>', unsafe_allow_html=True)
+        st.plotly_chart(draw_coverage(), use_container_width=True)
         st.caption(
-            "Dashed lines = target coverage. Bars = empirical coverage on held-out test set. "
-            "All four alpha levels pass. Marginal guarantee only — conditional coverage for "
-            "high-risk patients is lower. Not for clinical use."
+            "Dashed lines = target coverage level. Bars = empirical coverage on held-out test set (n=848). "
+            "All four alpha levels pass. Marginal coverage only — not for clinical use."
         )
 
     except Exception as e:
         st.error(f"Prediction error: {e}")
-        st.info("Check that model_artifacts.pkl is uploaded and scikit-learn==1.6.1 is in requirements.txt")
