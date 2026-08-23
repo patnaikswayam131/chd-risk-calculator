@@ -83,14 +83,12 @@ def draw_gauge(prob):
     ax.set_aspect("equal")
     ax.axis("off")
 
-    # Colour bands: green 0–15%, yellow 15–30%, red 30–100%
+    # Draw bands as thick line plots — solid_capstyle works here
     bands = [(0, 0.15, "#2d6a4f"), (0.15, 0.30, "#b5770d"), (0.30, 1.0, "#7a1e1e")]
     for lo, hi, color in bands:
-        theta1 = 180 - lo * 180
-        theta2 = 180 - hi * 180
-        arc = Arc((0, 0), 2, 2, angle=0, theta1=theta2, theta2=theta1,
-                  color=color, lw=22, solid_capstyle="butt")
-        ax.add_patch(arc)
+        theta = np.linspace(np.pi * (1 - hi), np.pi * (1 - lo), 200)
+        ax.plot(np.cos(theta), np.sin(theta),
+                color=color, lw=22, solid_capstyle="butt")
 
     # Needle
     angle_rad = np.pi * (1 - prob)
@@ -105,7 +103,7 @@ def draw_gauge(prob):
     avg_angle = np.pi * (1 - 0.152)
     ax.plot(np.cos(avg_angle), np.sin(avg_angle), "|",
             color="#aaaaaa", markersize=14, markeredgewidth=2)
-    ax.text(1.05 * np.cos(avg_angle), 1.05 * np.sin(avg_angle),
+    ax.text(1.05 * np.cos(avg_angle), 1.05 * np.sin(avg_angle) + 0.05,
             "avg", ha="center", va="bottom", color="#aaaaaa", fontsize=7)
 
     # Percentage label
@@ -113,13 +111,12 @@ def draw_gauge(prob):
             ha="center", va="center", fontsize=28,
             fontweight="bold", color="white")
     ax.text(0, -0.28, "10-year CHD probability",
-            ha="center", va="center", fontsize=8,
-            color="#8b8fa8")
+            ha="center", va="center", fontsize=8, color="#8b8fa8")
 
     # Scale labels
     for pct, label in [(0, "0%"), (0.15, "15%"), (0.30, "30%"), (1.0, "100%")]:
         a = np.pi * (1 - pct)
-        ax.text(1.15*np.cos(a), 1.15*np.sin(a), label,
+        ax.text(1.15 * np.cos(a), 1.15 * np.sin(a), label,
                 ha="center", va="center", color="#8b8fa8", fontsize=7)
 
     plt.tight_layout(pad=0)
